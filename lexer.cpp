@@ -261,6 +261,7 @@ void lexer::Tokenize() //function that tokenizes your input stream
 }
 lexer::lexer(const char filename[])
 {
+    index = 0;
     //constructors: takes file name as an argument and store all
     //the contents of file into the class varible stream
     ifstream fin(filename);
