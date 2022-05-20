@@ -17,6 +17,8 @@ parser::parser(const char filename[])
     _lexer = lexer(filename);
     _look_ahead = _lexer.getNextToken();
     start();
+    //_symbol_table.print();
+    print_TAC();
 }
 void parser::readAndPrintAllInput() //read and print allinputs (provided)
 {
@@ -135,8 +137,12 @@ void parser::statments()
     }
     else if (_look_ahead.tokenType==TokenType::IDENTIFIER)
     {
+        string id, value, type, id_v;
+        id = _look_ahead.lexeme;
         get_next_token();
-        dec_ini_assi();
+        dec_ini_assi(value, type, id_v);
+        emit(id + " = " + id_v);
+        _symbol_table.insert(id, value, type);
         statments();
     }
     else if (_look_ahead.tokenType == TokenType::KEYW_IN)
@@ -170,15 +176,24 @@ void parser::statments()
     }
 }
 
-void parser::dec_ini_assi()
+void parser::dec_ini_assi(string& value, string& type, string& id_v)
 {
     if (_look_ahead.tokenType == TokenType::ASSIGN)
     {
         get_next_token();
-        ini_assi_statment();
+        ini_assi_statment(value, type, id_v);
     }
     else if (_look_ahead.tokenType == TokenType::KEYW_INT || _look_ahead.tokenType == TokenType::KEYW_CHAR)
     {
+        if (_look_ahead.tokenType == TokenType::KEYW_INT)
+        {
+            type = "int";
+        }
+        else if (_look_ahead.tokenType == TokenType::KEYW_CHAR)
+        {
+            type = "char";
+        }
+        value = "";
         declaration();
     }
 }
@@ -187,6 +202,7 @@ void parser::declaration()
 {
     if (_look_ahead.tokenType == TokenType::KEYW_INT || _look_ahead.tokenType == TokenType::KEYW_CHAR)
     {
+
         get_next_token();
     }
     else
@@ -205,13 +221,15 @@ void parser::declaration()
 
 }
 
-void parser::ini_assi_statment()
+void parser::ini_assi_statment(string& value, string& type, string& id_v)
 {
     if (_look_ahead.tokenType == TokenType::CHARACTER_LITERAL)
     {
+        value = _look_ahead.lexeme;
         get_next_token();
         if (_look_ahead.tokenType == TokenType::KEYW_CHAR)
         {
+            type = "char";
             get_next_token();
             if (_look_ahead.tokenType == TokenType::SEMICOLON)
             {
@@ -229,9 +247,11 @@ void parser::ini_assi_statment()
     }
     else if (_look_ahead.tokenType == TokenType::NUMERIC_LITERAL || _look_ahead.tokenType == TokenType::IDENTIFIER)
     {
-        arithmatic_expression();
+        value = _look_ahead.lexeme;
+        type = "int";
+        arithmatic_expression(id_v);
         initialization();
-
+         
         if (_look_ahead.tokenType == TokenType::SEMICOLON)
         {
             get_next_token();
@@ -336,7 +356,8 @@ void parser::loop()
                 get_next_token();
                 if (_look_ahead.tokenType == TokenType::IDENTIFIER || _look_ahead.tokenType == TokenType::NUMERIC_LITERAL)
                 {
-                    relational_expression();
+                    string id_v, re_s, re_e;
+                    relational_expression(id_v, re_s, re_e);
                     if (_look_ahead.tokenType == TokenType::COMMA)
                     {
                         get_next_token();
@@ -407,7 +428,9 @@ void parser::selection()
         get_next_token();
         if (_look_ahead.tokenType == TokenType::IDENTIFIER || _look_ahead.tokenType == TokenType::NUMERIC_LITERAL)
         {
-            relational_expression();
+            string id_v, re_s, re_e;
+            relational_expression(id_v, re_s, re_e);
+            backpatch(re_s);
             if (_look_ahead.tokenType == TokenType::COLON)
             {
                 get_next_token();
@@ -415,20 +438,22 @@ void parser::selection()
                 {
                     get_next_token();
                     statments();
+                    string statments_next = to_string(_line_no);
                     if (_look_ahead.tokenType == TokenType::BLOCK_END)
                     {
                         get_next_token();
                         if (_look_ahead.tokenType == TokenType::KEYW_ELIF)
                         {
-                            elif_selection();
+                            elif_selection(re_e, statments_next);
                         }
                         else if (_look_ahead.tokenType == TokenType::KEYW_ELSE)
                         {
-                            else_selection();
+                           
+                            else_selection(re_e, statments_next);
                         }
                         else
                         {
-
+                            backpatch(re_e);
                         }
                     }
                     else
@@ -457,14 +482,18 @@ void parser::selection()
     }
 }
 
-void parser::elif_selection()
+void parser::elif_selection(string& re_e, string s_next)
 {
     if (_look_ahead.tokenType == TokenType::KEYW_ELIF)
     {
+        emit("goto");
+        backpatch(re_e);
         get_next_token();
         if (_look_ahead.tokenType == TokenType::IDENTIFIER || _look_ahead.tokenType == TokenType::NUMERIC_LITERAL)
         {
-            relational_expression();
+            string id_v, re_s, re_e;
+            relational_expression(id_v, re_s, re_e);
+            backpatch(re_s);
             if (_look_ahead.tokenType == TokenType::COLON)
             {
                 get_next_token();
@@ -472,20 +501,22 @@ void parser::elif_selection()
                 {
                     get_next_token();
                     statments();
+                    backpatch(s_next);
+                    s_next = to_string(_line_no);
                     if (_look_ahead.tokenType == TokenType::BLOCK_END)
                     {
                         get_next_token();
                         if (_look_ahead.tokenType == TokenType::KEYW_ELIF)
                         {
-                            elif_selection();
+                            elif_selection(re_e, s_next);
                         }
                         else if (_look_ahead.tokenType == TokenType::KEYW_ELSE)
                         {
-                            else_selection();
+                            else_selection(re_e, s_next);
                         }
                         else
                         {
-
+                            backpatch(re_e);
                         }
                     }
                     else
@@ -514,10 +545,11 @@ void parser::elif_selection()
     }
 }
 
-void parser::else_selection()
+void parser::else_selection(string& re_e, string s_next)
 {
     if (_look_ahead.tokenType == TokenType::KEYW_ELSE)
     {
+        emit("goto");
         get_next_token();
         if (_look_ahead.tokenType == TokenType::COLON)
         {
@@ -525,7 +557,9 @@ void parser::else_selection()
             if (_look_ahead.tokenType == TokenType::BLOCK_START)
             {
                 get_next_token();
+                backpatch(re_e);
                 statments();
+                backpatch(s_next);
                 if (_look_ahead.tokenType == TokenType::BLOCK_END)
                 {
                     get_next_token();
@@ -556,7 +590,8 @@ void parser::return_statment()
     if (_look_ahead.tokenType == TokenType::KEYW_RETURN)
     {
         get_next_token();
-        arithmatic_expression();
+        string id_v;
+        arithmatic_expression(id_v);
         if (_look_ahead.tokenType == TokenType::SEMICOLON)
         {
             get_next_token();
@@ -580,7 +615,8 @@ void parser::assignment_expression()
         if (_look_ahead.tokenType == TokenType::ASSIGN)
         {
             get_next_token();
-            arithmatic_expression();
+            string id_v;
+            arithmatic_expression(id_v);
         }
         else
         {
@@ -593,25 +629,25 @@ void parser::assignment_expression()
     }
 }
 
-void parser::relational_expression()
+void parser::relational_expression(string& id_v, string& re_s, string &re_e)
 {
-    greater_less_expression();
-    equal_to_expression();
+    greater_less_expression(id_v, re_s, re_e);
+    equal_to_expression(id_v, re_s, re_e);
 }
 
-void parser::equal_to_expression()
+void parser::equal_to_expression(string& id_v, string& re_s, string &re_e)
 {
     if (_look_ahead.tokenType == TokenType::EQUALS)
     {
         get_next_token();
-        greater_less_expression();
-        equal_to_expression();
+        greater_less_expression(id_v, re_s, re_e);
+        equal_to_expression(id_v, re_s, re_e);
     }
     else if (_look_ahead.tokenType == TokenType::NOT_EQUAL)
     {
         get_next_token();
-        greater_less_expression();
-        equal_to_expression();
+        greater_less_expression(id_v, re_s, re_e);
+        equal_to_expression(id_v, re_s, re_e);
     }
     else
     {
@@ -619,37 +655,47 @@ void parser::equal_to_expression()
     }
 }
 
-void parser::greater_less_expression()
+void parser::greater_less_expression(string& id_v, string& re_s, string &re_e)
 {
-    arithmatic_expression();
-    greater_less_expression_1();
+    arithmatic_expression(id_v);
+    string ro_v, id_v_1;
+    greater_less_expression_1(ro_v, id_v_1);
+    re_s = to_string(_line_no);
+    emit("if " + id_v + " " + ro_v + " " + id_v_1 + " goto");
+    re_e = to_string(_line_no);
+    emit("goto");
+
 }
 
-void parser::greater_less_expression_1()
+void parser::greater_less_expression_1(string& ro_v,string& id_v)
 {
     if (_look_ahead.tokenType == TokenType::GREATER_THAN)
     {
+        ro_v = ">";
         get_next_token();
-        arithmatic_expression();
-        greater_less_expression_1();
+        arithmatic_expression(id_v);
+        greater_less_expression_1(ro_v,id_v);
     }
     else if (_look_ahead.tokenType == TokenType::SMALLER_THAN)
     {
+        ro_v = "<";
         get_next_token();
-        arithmatic_expression();
-        greater_less_expression_1();
+        arithmatic_expression(id_v);
+        greater_less_expression_1(ro_v,id_v);
     }
     else if (_look_ahead.tokenType == TokenType::GREATER_THAN_EQUALTO)
     {
+        ro_v = ">=";
         get_next_token();
-        arithmatic_expression();
-        greater_less_expression_1();
+        arithmatic_expression(id_v);
+        greater_less_expression_1(ro_v,id_v);
     }
     else if (_look_ahead.tokenType == TokenType::SMALLER_THAN_EQUALTO)
     {
+        ro_v = "<=";
         get_next_token();
-        arithmatic_expression();
-        greater_less_expression_1();
+        arithmatic_expression(id_v);
+        greater_less_expression_1(ro_v, id_v);
     }
     else
     {
@@ -657,25 +703,37 @@ void parser::greater_less_expression_1()
     }
 }
 
-void parser::arithmatic_expression()
+void parser::arithmatic_expression(string &id_v)
 {
-    mul_div_expression();
-    add_sub_expression();
+    mul_div_expression(id_v);
+    string a_s_e_v = id_v;
+    add_sub_expression(a_s_e_v);
+    id_v = a_s_e_v;
 }
 
-void parser::add_sub_expression()
+void parser::add_sub_expression(string &a_s_e_v)
 {
     if (_look_ahead.tokenType == TokenType::ADD)
     {
         get_next_token();
-        mul_div_expression();
-        add_sub_expression();
+        string id_v;
+        mul_div_expression(id_v);
+        string temp = temp_variable();
+        emit(temp + " = " + a_s_e_v + " + " + id_v);
+        string a_s_e_v_1 = temp;
+        add_sub_expression(a_s_e_v_1);
+        a_s_e_v = a_s_e_v_1;
     }
     else if (_look_ahead.tokenType == TokenType::SUBTRACT)
     {
         get_next_token();
-        mul_div_expression();
-        add_sub_expression();
+        string id_v;
+        mul_div_expression(id_v);
+        string temp = temp_variable();
+        emit(temp + " = " + a_s_e_v + " - " + id_v);
+        string a_s_e_v_1 = temp;
+        add_sub_expression(a_s_e_v_1);
+        a_s_e_v = a_s_e_v_1;
     }
     else
     {
@@ -683,32 +741,50 @@ void parser::add_sub_expression()
     }
 }
 
-void parser::mul_div_expression()
+void parser::mul_div_expression(string &id_v)
 {
-    id();
-    mul_div_expression_1();
+    id(id_v);
+    string m_d_e_v = id_v;
+    mul_div_expression_1(m_d_e_v);
+    id_v = m_d_e_v;
 }
 
-void parser::mul_div_expression_1()
+void parser::mul_div_expression_1(string &m_d_e_v)
 {
     if (_look_ahead.tokenType == TokenType::MULTIPLY)
     {
         get_next_token();
-        id();
-        mul_div_expression_1();
+        string id_v;
+        id(id_v);
+        string temp = temp_variable();
+        emit(temp + " = " + m_d_e_v + " * " + id_v);
+        string m_d_e_v_1 = temp;
+        mul_div_expression_1(m_d_e_v_1);
+        m_d_e_v = m_d_e_v_1;
 
     }
     else if (_look_ahead.tokenType == TokenType::DIVIDE)
     {
         get_next_token();
-        id();
-        mul_div_expression_1();
+        string id_v;
+        id(id_v);
+        string temp = temp_variable();
+        emit(temp + " = " + m_d_e_v + " / " + id_v);
+        string m_d_e_v_1 = temp;
+        mul_div_expression_1(m_d_e_v_1);
+        m_d_e_v = m_d_e_v_1;
+
     }
     else if (_look_ahead.tokenType == TokenType::MODULO)
     {
         get_next_token();
-        id();
-        mul_div_expression_1();
+        string id_v;
+        id(id_v);
+        string temp = temp_variable();
+        emit(temp + " = " + m_d_e_v + " % " + id_v);
+        string m_d_e_v_1 = temp;
+        mul_div_expression_1(m_d_e_v_1);
+        m_d_e_v = m_d_e_v_1;
     }
     else
     {
@@ -716,19 +792,48 @@ void parser::mul_div_expression_1()
     }
 }
 
-void parser::id()
+void parser::id(string &id_v)
 {
     if (_look_ahead.tokenType == TokenType::IDENTIFIER)
     {
+        id_v = _look_ahead.lexeme;
         get_next_token();
     }
     else if (_look_ahead.tokenType == TokenType::NUMERIC_LITERAL)
     {
+        id_v = _look_ahead.lexeme;
         get_next_token();
     }
     else
     {
         syntax_error();
+    }
+}
+
+string parser::temp_variable()
+{
+    string temp = "t" + to_string(temp_variable_count);
+    temp_variable_count++;
+    return temp;   
+}
+
+void parser::emit(string line)
+{
+    TAD_code[_line_no] = line;
+    //cout << _line_no << " " << line << endl;
+    _line_no++;
+}
+
+void parser::backpatch(string line_no)
+{
+    TAD_code[stoi(line_no)] = TAD_code[stoi(line_no)] + " " + to_string(_line_no);
+}
+
+void parser::print_TAC()
+{
+    for (int i = 0; i < _line_no; i++)
+    {
+        cout << i<<" "<<TAD_code[i] << endl;
     }
 }
 

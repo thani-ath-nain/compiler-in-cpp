@@ -12,7 +12,7 @@ begin # Three address code generation starts after here
     in num; #take input
 	if num < 0:
 	begin
-		print "negative number entered\n";#print
+		print "negative number entered\n";
 		return 0;# this statement just halt the program
 	end
     print "\nThe fibonacci series :";#print
