@@ -1,0 +1,95 @@
+start-> 				comment start|	
+					main_keyword
+
+main_keyword->			func int main : 
+					block_start 
+					main_func  
+					block_end
+
+main_func->			 	statements
+
+statements->			comment statements
+statements->			identifier dec_ini_assi_statments
+					{ emit(identifier,"=",d.v); }
+					statements
+statements->			input statements
+statements->			output statements
+statements->			loop statements
+statements->			selection statements
+statements->			return arithmetic_expression statements
+statements->			null
+
+
+dec_ini_assi_statments->	assignment(<-) ini_assi_statment {d.v=d1.v}
+dec_ini_assi_statments->	declaration
+						
+declaration-> 			int ; | char  ;
+						
+ini_assi_statment->		char_literal char ; |
+					arithmetic_expression  initialization ; |
+
+initialization->			int | null
+
+				
+input->				in identifier ;
+
+output->				print  output` ; |
+					println output` ;
+output`->				identifier | string_literal
+				
+loop->				for 
+					assignment_expression, relational_expression , assignment_expression :
+					block_start
+					statements
+					block_end
+
+selection->				if relational_expression :
+					block_start
+					statements
+					block_end
+					elif_selection
+
+elif_selection->			elif relational_expression :
+					block_start
+					statements
+					block_end
+					else_selection |
+					else_selection
+
+else_selection->			else
+					block_start
+					statements
+					block_end	
+			
+							
+block_start-> 			begin
+
+block_end-> 			end
+
+relational_expression-> 		greater_less_expression equal_to_expression`
+equal_to_expression`-> 		equal_to(=) greater_less_expression equal_to_expression`|
+						not_equal_to(~=) greater_less_expression equal_to_expression`|
+						null
+
+greater_less_expression -> 		arithmetic_expression greater_less_expression`
+greater_less_expression`->	 	greater_than(>) arithmetic_expression  greater_less_expression`|
+						less_than(<) arithmetic_expression  greater_less_expression`|
+						greater_equal(>=) arithmetic_expression  greater_less_expression`|
+						less_equal(=<) arithmetic_expression  greater_less_expression`|
+						null
+				
+arithmetic_expression-> 		mul_div_expression  add_sub_expression`
+add_sub_expression`->			+ mul_div_expression add_sub_expression` | 
+						- mul_div_expression add_sub_expression` | 
+						null
+
+mul_div_expression->			id mul_div_expression`
+mul_div_expression`->			* id mul_div_expression` | 
+						/ id  mul_div_expression` | 
+						% id  mul_div_expression`| 
+						null
+
+
+id->						numeric_literal |
+						identifier
+

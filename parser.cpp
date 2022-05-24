@@ -26,7 +26,7 @@ void parser::readAndPrintAllInput() //read and print allinputs (provided)
     t = _lexer.getNextToken();
     while (t.tokenType != TokenType::END_OF_FILE)
     {
-        t.Print();
+        t.Print(); 
         t = _lexer.getNextToken();
     }
 }
@@ -138,21 +138,31 @@ void parser::statments()
     else if (_look_ahead.tokenType==TokenType::IDENTIFIER)
     {
         string id, value, type, id_v;
+        bool flag = 0;
         id = _look_ahead.lexeme;
         get_next_token();
-        dec_ini_assi(value, type, id_v);
-        emit(id + " = " + id_v);
+        dec_ini_assi(value, type, id_v, flag);
+        if (flag)
+            emit(id + " = " + id_v + ";");
         _symbol_table.insert(id, value, type);
         statments();
     }
     else if (_look_ahead.tokenType == TokenType::KEYW_IN)
     {
-        input();
+        string id_v;
+        input(id_v);
+        emit("in " + id_v + ";");
         statments();
     }
     else if (_look_ahead.tokenType == TokenType::KEYW_PRINT|| _look_ahead.tokenType == TokenType::KEYW_PRINTLN)
     {
-        output();
+        string id_v;
+        bool flag = 1;
+        output(id_v, flag);
+        if(flag)
+            emit("out " + id_v + ";");
+        else
+            emit("out \"" + id_v + "\";");
         statments();
     }
     else if (_look_ahead.tokenType == TokenType::KEYW_FOR)
@@ -167,7 +177,9 @@ void parser::statments()
     }
     else if (_look_ahead.tokenType == TokenType::KEYW_RETURN)
     {
-        return_statment();
+        string id_v;
+        return_statment(id_v);
+        emit("ret " + id_v + ";");
         statments();
     }
     else
@@ -176,12 +188,13 @@ void parser::statments()
     }
 }
 
-void parser::dec_ini_assi(string& value, string& type, string& id_v)
+void parser::dec_ini_assi(string& value, string& type, string& id_v,bool& flag)
 {
     if (_look_ahead.tokenType == TokenType::ASSIGN)
     {
         get_next_token();
         ini_assi_statment(value, type, id_v);
+        flag = 1;
     }
     else if (_look_ahead.tokenType == TokenType::KEYW_INT || _look_ahead.tokenType == TokenType::KEYW_CHAR)
     {
@@ -195,6 +208,7 @@ void parser::dec_ini_assi(string& value, string& type, string& id_v)
         }
         value = "";
         declaration();
+        flag = 0;
     }
 }
 
@@ -281,13 +295,14 @@ void parser::initialization()
     }
 }
 
-void parser::input()
+void parser::input(string& id_v)
 {
     if (_look_ahead.tokenType == TokenType::KEYW_IN)
     {
         get_next_token();
         if (_look_ahead.tokenType == TokenType::IDENTIFIER)
         {
+            id_v = _look_ahead.lexeme;
             get_next_token();
             if (_look_ahead.tokenType == TokenType::SEMICOLON)
             {
@@ -309,12 +324,12 @@ void parser::input()
     }
 }
 
-void parser::output()
+void parser::output(string& id_v, bool& flag)
 {
     if (_look_ahead.tokenType == TokenType::KEYW_PRINT || _look_ahead.tokenType == TokenType::KEYW_PRINTLN)
     {
         get_next_token();
-        output_1();
+        output_1(id_v, flag);
         if (_look_ahead.tokenType == TokenType::SEMICOLON)
         {
             get_next_token();
@@ -331,10 +346,15 @@ void parser::output()
 
 }
 
-void parser::output_1()
+void parser::output_1(string& id_v, bool& flag)
 {
     if (_look_ahead.tokenType == TokenType::IDENTIFIER || _look_ahead.tokenType == TokenType::STRING_LITERAL || _look_ahead.tokenType == TokenType::CHARACTER_LITERAL)
     {
+        if (_look_ahead.tokenType == TokenType::IDENTIFIER)
+            flag = 1;
+        else
+            flag = 0;
+        id_v = _look_ahead.lexeme;
         get_next_token();
     }
     else
@@ -350,7 +370,11 @@ void parser::loop()
         get_next_token();
         if (_look_ahead.tokenType == TokenType::IDENTIFIER || _look_ahead.tokenType == TokenType::NUMERIC_LITERAL)
         {
-            assignment_expression();
+            string id_v, id, s_next;
+            id = _look_ahead.lexeme;
+            assignment_expression(id_v);
+            emit(id + " = " + id_v + ";");
+            s_next = to_string(_line_no);
             if (_look_ahead.tokenType == TokenType::COMMA)
             {
                 get_next_token();
@@ -358,12 +382,16 @@ void parser::loop()
                 {
                     string id_v, re_s, re_e;
                     relational_expression(id_v, re_s, re_e);
+                    backpatch(re_s + ";");
                     if (_look_ahead.tokenType == TokenType::COMMA)
                     {
                         get_next_token();
                         if (_look_ahead.tokenType == TokenType::IDENTIFIER || _look_ahead.tokenType == TokenType::NUMERIC_LITERAL)
                         {
-                            assignment_expression();
+                            string id_v, id;
+                            id = _look_ahead.lexeme;
+                            assignment_expression(id_v);
+                            emit(id + " = " + id_v + ";");
                             if (_look_ahead.tokenType == TokenType::COLON)
                             {
                                 get_next_token();
@@ -371,6 +399,8 @@ void parser::loop()
                                 {
                                     get_next_token();
                                     statments();
+                                    emit("goto " + s_next + ";");
+                                    backpatch(re_e + ";");
                                     if (_look_ahead.tokenType == TokenType::BLOCK_END)
                                     {
                                         get_next_token();
@@ -430,7 +460,7 @@ void parser::selection()
         {
             string id_v, re_s, re_e;
             relational_expression(id_v, re_s, re_e);
-            backpatch(re_s);
+            backpatch(re_s + ";");
             if (_look_ahead.tokenType == TokenType::COLON)
             {
                 get_next_token();
@@ -453,7 +483,7 @@ void parser::selection()
                         }
                         else
                         {
-                            backpatch(re_e);
+                            backpatch(re_e + ";");
                         }
                     }
                     else
@@ -487,13 +517,13 @@ void parser::elif_selection(string& re_e, string s_next)
     if (_look_ahead.tokenType == TokenType::KEYW_ELIF)
     {
         emit("goto");
-        backpatch(re_e);
+        backpatch(re_e + ";");
         get_next_token();
         if (_look_ahead.tokenType == TokenType::IDENTIFIER || _look_ahead.tokenType == TokenType::NUMERIC_LITERAL)
         {
             string id_v, re_s, re_e;
             relational_expression(id_v, re_s, re_e);
-            backpatch(re_s);
+            backpatch(re_s + ";");
             if (_look_ahead.tokenType == TokenType::COLON)
             {
                 get_next_token();
@@ -501,7 +531,7 @@ void parser::elif_selection(string& re_e, string s_next)
                 {
                     get_next_token();
                     statments();
-                    backpatch(s_next);
+                    backpatch(s_next + ";");
                     s_next = to_string(_line_no);
                     if (_look_ahead.tokenType == TokenType::BLOCK_END)
                     {
@@ -516,7 +546,7 @@ void parser::elif_selection(string& re_e, string s_next)
                         }
                         else
                         {
-                            backpatch(re_e);
+                            backpatch(re_e + ";");
                         }
                     }
                     else
@@ -557,9 +587,9 @@ void parser::else_selection(string& re_e, string s_next)
             if (_look_ahead.tokenType == TokenType::BLOCK_START)
             {
                 get_next_token();
-                backpatch(re_e);
+                backpatch(re_e + ";");
                 statments();
-                backpatch(s_next);
+                backpatch(s_next + ";");
                 if (_look_ahead.tokenType == TokenType::BLOCK_END)
                 {
                     get_next_token();
@@ -585,12 +615,11 @@ void parser::else_selection(string& re_e, string s_next)
     }
 }
 
-void parser::return_statment()
+void parser::return_statment(string &id_v)
 {
     if (_look_ahead.tokenType == TokenType::KEYW_RETURN)
     {
         get_next_token();
-        string id_v;
         arithmatic_expression(id_v);
         if (_look_ahead.tokenType == TokenType::SEMICOLON)
         {
@@ -607,7 +636,7 @@ void parser::return_statment()
     }
 }
 
-void parser::assignment_expression()
+void parser::assignment_expression(string& id_v)
 {
     if (_look_ahead.tokenType == TokenType::IDENTIFIER)
     {
@@ -615,7 +644,6 @@ void parser::assignment_expression()
         if (_look_ahead.tokenType == TokenType::ASSIGN)
         {
             get_next_token();
-            string id_v;
             arithmatic_expression(id_v);
         }
         else
@@ -719,7 +747,7 @@ void parser::add_sub_expression(string &a_s_e_v)
         string id_v;
         mul_div_expression(id_v);
         string temp = temp_variable();
-        emit(temp + " = " + a_s_e_v + " + " + id_v);
+        emit(temp + " = " + a_s_e_v + " + " + id_v + ";");
         string a_s_e_v_1 = temp;
         add_sub_expression(a_s_e_v_1);
         a_s_e_v = a_s_e_v_1;
@@ -730,7 +758,7 @@ void parser::add_sub_expression(string &a_s_e_v)
         string id_v;
         mul_div_expression(id_v);
         string temp = temp_variable();
-        emit(temp + " = " + a_s_e_v + " - " + id_v);
+        emit(temp + " = " + a_s_e_v + " - " + id_v + ";");
         string a_s_e_v_1 = temp;
         add_sub_expression(a_s_e_v_1);
         a_s_e_v = a_s_e_v_1;
@@ -757,7 +785,7 @@ void parser::mul_div_expression_1(string &m_d_e_v)
         string id_v;
         id(id_v);
         string temp = temp_variable();
-        emit(temp + " = " + m_d_e_v + " * " + id_v);
+        emit(temp + " = " + m_d_e_v + " * " + id_v + ";");
         string m_d_e_v_1 = temp;
         mul_div_expression_1(m_d_e_v_1);
         m_d_e_v = m_d_e_v_1;
@@ -769,7 +797,7 @@ void parser::mul_div_expression_1(string &m_d_e_v)
         string id_v;
         id(id_v);
         string temp = temp_variable();
-        emit(temp + " = " + m_d_e_v + " / " + id_v);
+        emit(temp + " = " + m_d_e_v + " / " + id_v + ";");
         string m_d_e_v_1 = temp;
         mul_div_expression_1(m_d_e_v_1);
         m_d_e_v = m_d_e_v_1;
@@ -781,7 +809,7 @@ void parser::mul_div_expression_1(string &m_d_e_v)
         string id_v;
         id(id_v);
         string temp = temp_variable();
-        emit(temp + " = " + m_d_e_v + " % " + id_v);
+        emit(temp + " = " + m_d_e_v + " % " + id_v + ";");
         string m_d_e_v_1 = temp;
         mul_div_expression_1(m_d_e_v_1);
         m_d_e_v = m_d_e_v_1;
@@ -831,7 +859,7 @@ void parser::backpatch(string line_no)
 
 void parser::print_TAC()
 {
-    for (int i = 0; i < _line_no; i++)
+    for (int i = 1; i < _line_no; i++)
     {
         cout << i<<" "<<TAD_code[i] << endl;
     }
